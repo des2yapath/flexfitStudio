@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import {
   corporateBookings,
   classes,
   companies,
-  companyMembers,
   checkins,
   users,
 } from "@/db/schema";
+import { bookClassFor, cancelBookingFor } from "../services/booking-service";
 import { router, protectedProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -16,27 +16,6 @@ import { router, protectedProcedure, staffProcedure } from "../trpc";
  * the class starts. Cancelling later still frees the spot but forfeits the credit.
  */
 export const CORPORATE_FREE_CANCELLATION_HOURS = 24;
-
-function hoursUntil(iso: string, now = new Date()): number {
-  return (new Date(iso).getTime() - now.getTime()) / 36e5;
-}
-
-async function getCompanyForMember(
-  db: typeof import("@/db").db,
-  userId: number,
-) {
-  return db
-    .select()
-    .from(companyMembers)
-    .innerJoin(companies, eq(companyMembers.companyId, companies.id))
-    .where(
-      and(
-        eq(companyMembers.userId, userId),
-        eq(companies.active, true),
-      ),
-    )
-    .get();
-}
 
 export const corporateBookingsRouter = router({
   mine: protectedProcedure
@@ -71,197 +50,23 @@ export const corporateBookingsRouter = router({
   book: protectedProcedure
     .input(z.object({ classId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const cls = await ctx.db
-        .select()
-        .from(classes)
-        .where(eq(classes.id, input.classId))
-        .get();
-
-      if (!cls) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
-      }
-      if (cls.cancelled) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This class has been cancelled.",
-        });
-      }
-      if (hoursUntil(cls.startsAt) <= 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This class has already started.",
-        });
-      }
-
-      const existing = await ctx.db
-        .select()
-        .from(corporateBookings)
-        .where(
-          and(
-            eq(corporateBookings.classId, cls.id),
-            eq(corporateBookings.userId, ctx.user.id),
-            inArray(corporateBookings.status, ["booked", "waitlisted"]),
-          ),
-        )
-        .get();
-
-      if (existing) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "You are already on the list for this class.",
-        });
-      }
-
-      const companyRow = await getCompanyForMember(ctx.db, ctx.user.id);
-      if (!companyRow) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You are not linked to an active company.",
-        });
-      }
-
-      const company = companyRow.companies;
-      if (company.creditPoolBalance < cls.creditCost) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Your company does not have enough credits.",
-        });
-      }
-
-      const [{ count }] = await ctx.db
-        .select({ count: sql<number>`count(*)` })
-        .from(corporateBookings)
-        .where(
-          and(
-            eq(corporateBookings.classId, cls.id),
-            eq(corporateBookings.status, "booked"),
-          ),
-        );
-
-      const isFull = Number(count) >= cls.capacity;
-
-      const created = await ctx.db
-        .insert(corporateBookings)
-        .values({
-          classId: cls.id,
-          userId: ctx.user.id,
-          companyId: company.id,
-          status: isFull ? "waitlisted" : "booked",
-          creditsUsed: isFull ? 0 : cls.creditCost,
-        })
-        .returning()
-        .get();
-
-      if (!isFull) {
-        await ctx.db
-          .update(companies)
-          .set({
-            creditPoolBalance: company.creditPoolBalance - cls.creditCost,
-          })
-          .where(eq(companies.id, company.id));
-      }
-
-      return created;
+      return bookClassFor(ctx.db, {
+        kind: "corporate",
+        userId: ctx.user.id,
+        classId: input.classId,
+      });
     }),
 
   cancel: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const row = await ctx.db
-        .select({ booking: corporateBookings, cls: classes })
-        .from(corporateBookings)
-        .innerJoin(classes, eq(corporateBookings.classId, classes.id))
-        .where(eq(corporateBookings.id, input.bookingId))
-        .get();
-
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." });
-      }
-
-      const isOwner = row.booking.userId === ctx.user.id;
-      const isStaff = ctx.user.role === "admin" || ctx.user.role === "trainer";
-      if (!isOwner && !isStaff) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You cannot cancel this booking.",
-        });
-      }
-
-      if (row.booking.status !== "booked" && row.booking.status !== "waitlisted") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This booking is no longer active.",
-        });
-      }
-
-      const refundable =
-        hoursUntil(row.cls.startsAt) >= CORPORATE_FREE_CANCELLATION_HOURS &&
-        row.booking.creditsUsed > 0;
-
-      await ctx.db
-        .update(corporateBookings)
-        .set({ status: "cancelled", cancelledAt: new Date().toISOString() })
-        .where(eq(corporateBookings.id, row.booking.id));
-
-      if (refundable) {
-        const company = await ctx.db
-          .select()
-          .from(companies)
-          .where(eq(companies.id, row.booking.companyId))
-          .get();
-
-        if (company) {
-          await ctx.db
-            .update(companies)
-            .set({
-              creditPoolBalance:
-                company.creditPoolBalance + row.booking.creditsUsed,
-            })
-            .where(eq(companies.id, company.id));
-        }
-      }
-
-      // Freeing a confirmed spot promotes the member who has waited longest.
-      if (row.booking.status === "booked") {
-        const next = await ctx.db
-          .select()
-          .from(corporateBookings)
-          .where(
-            and(
-              eq(corporateBookings.classId, row.cls.id),
-              eq(corporateBookings.status, "waitlisted"),
-            ),
-          )
-          .orderBy(asc(corporateBookings.bookedAt))
-          .get();
-
-        if (next) {
-          await ctx.db
-            .update(corporateBookings)
-            .set({ status: "booked", creditsUsed: row.cls.creditCost })
-            .where(eq(corporateBookings.id, next.id));
-
-          const company = await ctx.db
-            .select()
-            .from(companies)
-            .where(eq(companies.id, next.companyId))
-            .get();
-
-          if (company && company.creditPoolBalance >= row.cls.creditCost) {
-            await ctx.db
-              .update(companies)
-              .set({
-                creditPoolBalance: Math.max(
-                  0,
-                  company.creditPoolBalance - row.cls.creditCost,
-                ),
-              })
-              .where(eq(companies.id, company.id));
-          }
-        }
-      }
-
-      return { ok: true, refunded: refundable };
+      return cancelBookingFor(ctx.db, {
+        kind: "corporate",
+        bookingId: input.bookingId,
+        callerId: ctx.user.id,
+        callerRole: ctx.user.role,
+        freeCancellationHours: CORPORATE_FREE_CANCELLATION_HOURS,
+      });
     }),
 
   markAttended: staffProcedure
@@ -293,9 +98,14 @@ export const corporateBookingsRouter = router({
         .set({ status: "attended" })
         .where(eq(corporateBookings.id, booking.id));
 
+      // bookingId stays null: checkins.bookingId references the PERSONAL
+      // bookings table, so a corporate booking id would be a wrong-table
+      // reference. source is now passed through (was omitted -> every
+      // corporate check-in recorded as 'front_desk', even from the kiosk).
       await ctx.db.insert(checkins).values({
         userId: booking.userId,
         bookingId: null,
+        source: input.source,
       });
 
       return { ok: true };

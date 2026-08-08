@@ -5,11 +5,13 @@ import {
   memberships,
   classes,
   bookings,
+  corporateBookings,
   payments,
   checkins,
   membershipPlans,
 } from "@/db/schema";
 import { router, adminProcedure } from "../trpc";
+import { daysFromNow } from "@/lib/time";
 
 export const adminRouter = router({
   stats: adminProcedure.query(async ({ ctx }) => {
@@ -63,27 +65,55 @@ export const adminRouter = router({
   classUtilisation: adminProcedure
     .input(z.object({ limit: z.number().default(10) }).default({}))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
+      const classRows = await ctx.db
         .select({
           id: classes.id,
           name: classes.name,
           startsAt: classes.startsAt,
           capacity: classes.capacity,
-          booked: sql<number>`(
-            select count(*) from ${bookings}
-            where ${bookings.classId} = ${classes.id}
-              and ${bookings.status} in ('booked','attended')
-          )`.as("booked"),
         })
         .from(classes)
         .where(eq(classes.cancelled, false))
         .limit(input.limit);
 
-      return rows.map((r) => ({
-        ...r,
-        booked: Number(r.booked),
-        utilisation: r.capacity ? Number(r.booked) / r.capacity : 0,
-      }));
+      // Counts computed with plain group-bys (no correlated subquery — drizzle
+      // renders those unqualified when the outer query has no JOIN, which
+      // silently broke the old report to ~0% for every class).
+      const [personal, corporate] = await Promise.all([
+        ctx.db
+          .select({
+            classId: bookings.classId,
+            count: sql<number>`count(*)`,
+          })
+          .from(bookings)
+          .where(inArray(bookings.status, ["booked", "attended"]))
+          .groupBy(bookings.classId),
+        ctx.db
+          .select({
+            classId: corporateBookings.classId,
+            count: sql<number>`count(*)`,
+          })
+          .from(corporateBookings)
+          .where(inArray(corporateBookings.status, ["booked", "attended"]))
+          .groupBy(corporateBookings.classId),
+      ]);
+
+      const counts = new Map<number, number>();
+      for (const r of personal) {
+        counts.set(r.classId, (counts.get(r.classId) ?? 0) + Number(r.count));
+      }
+      for (const r of corporate) {
+        counts.set(r.classId, (counts.get(r.classId) ?? 0) + Number(r.count));
+      }
+
+      return classRows.map((r) => {
+        const booked = counts.get(r.id) ?? 0;
+        return {
+          ...r,
+          booked,
+          utilisation: r.capacity ? booked / r.capacity : 0,
+        };
+      });
     }),
 
   revenueByMonth: adminProcedure.query(async ({ ctx }) => {
@@ -124,9 +154,7 @@ export const adminRouter = router({
 
   expiringMemberships: adminProcedure.query(async ({ ctx }) => {
     const today = new Date().toISOString().slice(0, 10);
-    const in14Days = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    const in14Days = daysFromNow(14).toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .select({
@@ -161,9 +189,7 @@ export const adminRouter = router({
   }),
 
   checkinsPerDay: adminProcedure.query(async ({ ctx }) => {
-    const start = new Date();
-    start.setDate(start.getDate() - 14);
-    const startStr = start.toISOString().slice(0, 10);
+    const startStr = daysFromNow(-14).toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .select({
@@ -182,9 +208,7 @@ export const adminRouter = router({
   }),
 
   topTrainers: adminProcedure.query(async ({ ctx }) => {
-    const start = new Date();
-    start.setDate(start.getDate() - 14);
-    const startStr = start.toISOString().slice(0, 10);
+    const startStr = daysFromNow(-14).toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .select({
@@ -215,9 +239,7 @@ export const adminRouter = router({
   }),
 
   noShowList: adminProcedure.query(async ({ ctx }) => {
-    const start = new Date();
-    start.setDate(start.getDate() - 14);
-    const startStr = start.toISOString().slice(0, 10);
+    const startStr = daysFromNow(-14).toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .select({

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
-import { classes, bookings, users } from "@/db/schema";
-import { router, publicProcedure, staffProcedure, adminProcedure } from "../trpc";
+import { classes, bookings, corporateBookings, users } from "@/db/schema";
+import { cancelClassBookings } from "../services/booking-service";
+import { router, publicProcedure, protectedProcedure, staffProcedure, adminProcedure } from "../trpc";
 
 export const classesRouter = router({
   list: publicProcedure
@@ -34,9 +35,13 @@ export const classesRouter = router({
           cancelled: classes.cancelled,
           trainerName: users.name,
           booked: sql<number>`(
-            select count(*) from ${bookings}
-            where ${bookings.classId} = ${classes.id}
-              and ${bookings.status} = 'booked'
+            (select count(*) from ${bookings}
+             where ${bookings.classId} = ${classes.id}
+               and ${bookings.status} = 'booked')
+            +
+            (select count(*) from ${corporateBookings}
+             where ${corporateBookings.classId} = ${classes.id}
+               and ${corporateBookings.status} = 'booked')
           )`.as("booked"),
         })
         .from(classes)
@@ -51,7 +56,7 @@ export const classesRouter = router({
       }));
     }),
 
-  byId: publicProcedure
+  byId: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const cls = await ctx.db
@@ -69,7 +74,6 @@ export const classesRouter = router({
           bookingId: bookings.id,
           status: bookings.status,
           memberName: users.name,
-          memberEmail: users.email,
         })
         .from(bookings)
         .innerJoin(users, eq(bookings.userId, users.id))
@@ -143,12 +147,10 @@ export const classesRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
       }
 
-      await ctx.db
-        .update(bookings)
-        .set({ status: "cancelled", cancelledAt: new Date().toISOString() })
-        .where(
-          and(eq(bookings.classId, input.id), eq(bookings.status, "booked")),
-        );
+      // Cancel every active row (booked OR waitlisted) in BOTH the personal
+      // and corporate tables — previously corporate bookings and waitlists
+      // were stranded on a cancelled class.
+      await cancelClassBookings(ctx.db, input.id);
 
       return cls;
     }),
