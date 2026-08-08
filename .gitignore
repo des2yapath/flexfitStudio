@@ -1,5 +1,6 @@
 node_modules
 .next
+.freebuff
 out
 build
 *.db
