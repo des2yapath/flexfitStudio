@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatDateTime } from "@/lib/format";
+import { Badge } from "@/components/ui/Badge";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function SchedulePage() {
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
-  const { data: classes, isLoading } = trpc.classes.list.useQuery({
-    from: new Date().toISOString(),
-  });
+  // Computed once per mount so the query key is stable — recomputing it on
+  // every render made the key change each render, causing an infinite refetch loop.
+  const [from] = useState(() => new Date().toISOString());
+  const { data: classes, isLoading } = trpc.classes.list.useQuery({ from });
 
   const book = trpc.bookings.book.useMutation({
     onSuccess: async () => {
@@ -17,7 +21,8 @@ export default function SchedulePage() {
     },
   });
 
-  if (isLoading) return <p className="muted">Loading schedule...</p>;
+  if (isLoading)
+    return <AsyncState isLoading loadingText="Loading schedule..." />;
 
   return (
     <div className="space-y-6">
@@ -29,7 +34,7 @@ export default function SchedulePage() {
       </div>
 
       {book.error && (
-        <p className="panel p-3 text-sm" style={{ color: "#f87171" }}>
+        <p className="panel p-3 text-sm" style={{ color: "var(--danger)" }}>
           {book.error.message}
         </p>
       )}
@@ -43,11 +48,7 @@ export default function SchedulePage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="font-medium">{c.name}</h2>
-                {c.full && (
-                  <span className="rounded px-1.5 py-0.5 text-xs" style={{ background: "#3a2a1a", color: "#fbbf24" }}>
-                    Full
-                  </span>
-                )}
+                {c.full && <Badge>Full</Badge>}
               </div>
               <p className="muted mt-0.5 text-sm">
                 {formatDateTime(c.startsAt)} &middot; {c.room} &middot;{" "}

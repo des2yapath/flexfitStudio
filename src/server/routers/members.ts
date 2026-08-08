@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { users, memberships, membershipPlans, bookings } from "@/db/schema";
+import { toSafeUser } from "@/lib/user";
 import { router, protectedProcedure, staffProcedure, adminProcedure } from "../trpc";
 
 export const membersRouter = router({
@@ -48,12 +49,14 @@ export const membersRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.db
+      const updated = await ctx.db
         .update(users)
         .set(input)
         .where(eq(users.id, ctx.user.id))
         .returning()
         .get();
+
+      return updated ? toSafeUser(updated) : updated;
     }),
 
   search: staffProcedure
@@ -105,30 +108,32 @@ export const membersRouter = router({
         .where(eq(memberships.userId, user.id))
         .orderBy(desc(memberships.startDate));
 
-      const { passwordHash: _omit, ...safe } = user;
-      return { ...safe, memberships: history };
-    }),
+      return { ...toSafeUser(user), memberships: history };    }),
 
   setActive: adminProcedure
     .input(z.object({ id: z.number(), active: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.db
+      const updated = await ctx.db
         .update(users)
         .set({ active: input.active })
         .where(eq(users.id, input.id))
         .returning()
         .get();
+
+      return updated ? toSafeUser(updated) : updated;
     }),
 
   setRole: adminProcedure
     .input(z.object({ id: z.number(), role: z.enum(["member", "trainer", "admin"]) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.db
+      const updated = await ctx.db
         .update(users)
         .set({ role: input.role })
         .where(eq(users.id, input.id))
         .returning()
         .get();
+
+      return updated ? toSafeUser(updated) : updated;
     }),
 
   lookupByEmailOrPhone: staffProcedure

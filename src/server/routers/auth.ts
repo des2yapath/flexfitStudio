@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { users, sessions } from "@/db/schema";
 import { verifyPassword, hashPassword } from "@/lib/password";
+import { toSafeUser } from "@/lib/user";
 import {
   router,
   publicProcedure,
@@ -15,7 +16,7 @@ import {
 const SESSION_DAYS = 30;
 
 export const authRouter = router({
-  me: publicProcedure.query(({ ctx }) => ctx.user),
+  me: publicProcedure.query(({ ctx }) => (ctx.user ? toSafeUser(ctx.user) : null)),
 
   login: publicProcedure
     .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
