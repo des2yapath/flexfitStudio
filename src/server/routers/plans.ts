@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { membershipPlans, memberships, payments } from "@/db/schema";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
+import { activeMembershipFor } from "../services/memberships";
 
 function addDays(dateIso: string, days: number): string {
   const d = new Date(dateIso);
@@ -39,6 +40,19 @@ export const plansRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "This plan is no longer available.",
+        });
+      }
+
+      // A member can only hold ONE active membership. Buying another while one
+      // is still running stacked rows that three parts of the app disambiguated
+      // differently (ISSUES.md #6) — the second subscription is now rejected.
+      // "Active" uses the same definition as the booking path (status='active'
+      // AND not expired), so this guard and the book flow always agree.
+      const existing = await activeMembershipFor(ctx.db, ctx.user.id);
+      if (existing) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "You already have an active membership.",
         });
       }
 
