@@ -9,6 +9,14 @@
   --text: #e6e8ec;
   --muted: #8b93a3;
   --accent: #4ade80;
+  /* Design tokens (ISSUES.md #4) — one source of truth for repeated values */
+  --bg-secondary: #101319; /* matches .input background; was referenced but never defined */
+  --fg: var(--text); /* alias used by kiosk / trainer inline styles; was never defined */
+  --danger: #f87171; /* error text */
+  --danger-bg: #7f1d1d; /* danger banner / .btn-danger background */
+  --danger-text: #fca5a5; /* danger banner text */
+  --warning-bg: #3a2a1a; /* amber "Full / Waitlist" badge background */
+  --warning-text: #fbbf24; /* amber "Full / Waitlist" badge text */
 }
 
 body {
@@ -51,6 +59,47 @@ body {
 
 .btn-primary:hover:not(:disabled) {
   background: #37c96f;
+}
+
+.btn-outline {
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-bg);
+  color: #fecaca;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+/* .btn-sm comes last so it wins the padding/font-size clash when combined
+   with .btn, .btn-primary, .btn-outline or .btn-danger (equal specificity). */
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .input {

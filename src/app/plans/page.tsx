@@ -2,6 +2,7 @@
 
 import { trpc } from "@/lib/trpc";
 import { formatMoney } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function PlansPage() {
   const utils = trpc.useUtils();
@@ -15,14 +16,15 @@ export default function PlansPage() {
     },
   });
 
-  if (isLoading) return <p className="muted">Loading plans...</p>;
+  if (isLoading)
+    return <AsyncState isLoading loadingText="Loading plans..." />;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Membership plans</h1>
 
       {subscribe.error && (
-        <p className="panel p-3 text-sm" style={{ color: "#f87171" }}>
+        <p className="panel p-3 text-sm" style={{ color: "var(--danger)" }}>
           {subscribe.error.message}
         </p>
       )}

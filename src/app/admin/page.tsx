@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { formatMoney, formatDateTime } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function AdminPage() {
   const { data: stats, isLoading, error } = trpc.admin.stats.useQuery(undefined, {
@@ -11,8 +12,7 @@ export default function AdminPage() {
   const { data: utilisation } = trpc.admin.classUtilisation.useQuery({ limit: 8 });
   const { data: payments } = trpc.payments.all.useQuery({ limit: 10 });
 
-  if (isLoading) return <p className="muted">Loading...</p>;
-  if (error) return <p className="muted">{error.message}</p>;
+  if (isLoading || error) return <AsyncState isLoading={isLoading} error={error} />;
 
   const tiles: [string, string][] = [
     ["Members", String(stats!.totalMembers)],

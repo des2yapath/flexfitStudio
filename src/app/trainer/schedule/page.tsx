@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatDateTime } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 function ClassCard({ classId, className, startsAt, room, durationMin, cancelled }: { classId: number; className: string; startsAt: string; room: string; durationMin: number; cancelled: boolean }) {
   const { data: roster, isLoading: rosterLoading } = trpc.bookings.rosterFor.useQuery({ classId });
@@ -25,7 +26,7 @@ function ClassCard({ classId, className, startsAt, room, durationMin, cancelled 
             </div>
           )}
           {cancelled && (
-            <div className="mt-1 rounded px-2 py-1 text-xs" style={{ background: "#7f1d1d", color: "#fca5a5" }}>
+            <div className="mt-1 rounded px-2 py-1 text-xs" style={{ background: "var(--danger-bg)", color: "var(--danger-text)" }}>
               Cancelled
             </div>
           )}
@@ -102,7 +103,7 @@ export default function TrainerSchedulePage() {
     removeAvailability.mutate({ dayOfWeek: day });
   };
 
-  if (isLoading) return <p className="muted">Loading...</p>;
+  if (isLoading) return <AsyncState isLoading />;
 
   const availabilityMap = new Map(
     availability?.map((a) => [a.dayOfWeek, a]) || [],
@@ -210,7 +211,7 @@ export default function TrainerSchedulePage() {
                           className="btn btn-sm"
                           style={{
                             background: "var(--bg-secondary)",
-                            color: "#ef4444",
+                            color: "var(--danger)",
                             borderColor: "var(--border)",
                           }}
                         >

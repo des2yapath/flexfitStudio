@@ -4,6 +4,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { RescheduleModal } from "@/components/reschedule-modal";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function DashboardPage() {
   const [rescheduleModal, setRescheduleModal] = useState<{
@@ -35,8 +36,14 @@ export default function DashboardPage() {
     },
   });
 
-  if (isLoading) return <p className="muted">Loading...</p>;
-  if (!profile) return <p className="muted">Please sign in to view your bookings.</p>;
+  if (isLoading || !profile)
+    return (
+      <AsyncState
+        isLoading={isLoading}
+        isEmpty={!profile}
+        emptyText="Please sign in to view your bookings."
+      />
+    );
 
   const ms = profile.membership;
 
@@ -83,13 +90,13 @@ export default function DashboardPage() {
         <h2 className="font-medium">Upcoming bookings</h2>
 
         {successMessage && (
-          <p className="panel p-3 text-sm" style={{ color: "#4ade80" }}>
+          <p className="panel p-3 text-sm" style={{ color: "var(--accent)" }}>
             {successMessage}
           </p>
         )}
 
         {cancel.error && (
-          <p className="panel p-3 text-sm" style={{ color: "#f87171" }}>
+          <p className="panel p-3 text-sm" style={{ color: "var(--danger)" }}>
             {cancel.error.message}
           </p>
         )}

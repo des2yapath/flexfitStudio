@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatDateTime } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function CompanyDetailsPage() {
   const params = useParams();
@@ -64,8 +65,14 @@ export default function CompanyDetailsPage() {
     linkMutation.mutate({ companyId: id, userId });
   };
 
-  if (isLoading) return <p className="muted">Loading...</p>;
-  if (!company) return <p className="muted">Company not found</p>;
+  if (isLoading || !company)
+    return (
+      <AsyncState
+        isLoading={isLoading}
+        isEmpty={!company}
+        emptyText="Company not found"
+      />
+    );
 
   return (
     <div className="space-y-6">
@@ -163,10 +170,10 @@ export default function CompanyDetailsPage() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {memberSearchData
                 .filter(
-                  (user: any) =>
-                    !company.members.some((m: any) => m.id === user.id),
+                  (user) =>
+                    !company.members.some((m) => m.id === user.id),
                 )
-                .map((user: any) => (
+                .map((user) => (
                   <div
                     key={user.id}
                     className="flex items-center justify-between p-2 border rounded"
@@ -206,7 +213,7 @@ export default function CompanyDetailsPage() {
         <h2 className="font-medium">Linked Members ({company.members.length})</h2>
         {company.members.length > 0 ? (
           <div className="panel divide-y" style={{ borderColor: "var(--border)" }}>
-            {company.members.map((member: any) => (
+            {company.members.map((member) => (
               <div key={member.id} className="flex items-center gap-4 p-3">
                 <div className="flex-1">
                   <div className="font-medium text-sm">{member.name}</div>
@@ -214,7 +221,8 @@ export default function CompanyDetailsPage() {
                 </div>
                 <button
                   onClick={() => unlinkMutation.mutate({ companyMemberId: member.companyMemberId })}
-                  className="btn-outline btn-sm text-red-600"
+                  className="btn-outline btn-sm"
+                  style={{ color: "var(--danger)" }}
                   disabled={unlinkMutation.isPending}
                 >
                   Remove
@@ -231,7 +239,7 @@ export default function CompanyDetailsPage() {
         <h2 className="font-medium">Recent Corporate Bookings</h2>
         {company.recentBookings.length > 0 ? (
           <div className="panel divide-y" style={{ borderColor: "var(--border)" }}>
-            {company.recentBookings.map((booking: any) => (
+            {company.recentBookings.map((booking) => (
               <div key={booking.id} className="p-3 text-sm space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{booking.className}</span>

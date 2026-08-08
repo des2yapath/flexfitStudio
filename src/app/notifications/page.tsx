@@ -2,6 +2,7 @@
 
 import { trpc } from "@/lib/trpc";
 import { formatDateTime } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function NotificationsPage() {
   const { data: notifications, isLoading, error } = trpc.notifications.list.useQuery(
@@ -18,8 +19,7 @@ export default function NotificationsPage() {
 
   const utils = trpc.useUtils();
 
-  if (isLoading) return <p className="muted">Loading...</p>;
-  if (error) return <p className="muted">{error.message}</p>;
+  if (isLoading || error) return <AsyncState isLoading={isLoading} error={error} />;
 
   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
 

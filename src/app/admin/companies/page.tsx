@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatMoney } from "@/lib/format";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function CompaniesPage() {
   const { data: companies, isLoading, refetch } = trpc.adminCompanies.list.useQuery();
@@ -43,7 +44,7 @@ export default function CompaniesPage() {
     });
   };
 
-  if (isLoading) return <p className="muted">Loading...</p>;
+  if (isLoading) return <AsyncState isLoading />;
 
   return (
     <div className="space-y-6">
@@ -132,7 +133,7 @@ export default function CompaniesPage() {
 
             {error && (
               <div className="p-3 rounded" style={{ backgroundColor: "rgba(239, 68, 68, 0.1)" }}>
-                <p style={{ color: "#ef4444" }}>{error}</p>
+                <p style={{ color: "var(--danger)" }}>{error}</p>
               </div>
             )}
           </form>

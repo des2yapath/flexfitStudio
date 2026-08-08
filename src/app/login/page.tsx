@@ -51,7 +51,7 @@ export default function LoginPage() {
         </div>
 
         {login.error && (
-          <p className="text-sm" style={{ color: "#f87171" }}>
+          <p className="text-sm" style={{ color: "var(--danger)" }}>
             {login.error.message}
           </p>
         )}

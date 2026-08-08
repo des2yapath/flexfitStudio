@@ -2,6 +2,8 @@
 
 import { trpc } from "@/lib/trpc";
 import { formatDateTime } from "@/lib/format";
+import { Badge } from "@/components/ui/Badge";
+import { AsyncState } from "@/components/ui/AsyncState";
 
 export default function WaitlistPage() {
   const utils = trpc.useUtils();
@@ -14,7 +16,7 @@ export default function WaitlistPage() {
     },
   });
 
-  if (isLoading) return <p className="muted">Loading...</p>;
+  if (isLoading) return <AsyncState isLoading />;
 
   return (
     <div className="space-y-6">
@@ -26,7 +28,7 @@ export default function WaitlistPage() {
       </div>
 
       {cancel.error && (
-        <p className="panel p-3 text-sm" style={{ color: "#f87171" }}>
+        <p className="panel p-3 text-sm" style={{ color: "var(--danger)" }}>
           {cancel.error.message}
         </p>
       )}
@@ -38,9 +40,7 @@ export default function WaitlistPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium">{w.className}</h3>
-                  <span className="rounded px-2 py-1 text-xs font-medium" style={{ background: "#3a2a1a", color: "#fbbf24" }}>
-                    #{w.position} in queue
-                  </span>
+                  <Badge>#{w.position} in queue</Badge>
                 </div>
                 <p className="muted mt-0.5 text-sm">
                   {formatDateTime(w.startsAt)} &middot; {w.room} &middot; {w.durationMin} min

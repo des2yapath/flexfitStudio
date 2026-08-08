@@ -85,7 +85,7 @@ export default function KioskPage() {
         </div>
 
         {lookupMember.isLoading && <p className="muted text-sm">Searching...</p>}
-        {lookupMember.error && <p className="text-sm" style={{ color: "#ef4444" }}>Member not found</p>}
+        {lookupMember.error && <p className="text-sm" style={{ color: "var(--danger)" }}>Member not found</p>}
         {lookupMember.data && !selectedMember && (
           <div className="panel p-4">
             <div className="flex items-center justify-between">
@@ -128,12 +128,12 @@ export default function KioskPage() {
           {memberDetails.data?.memberships && memberDetails.data.memberships.length > 0 && (
             <div className="space-y-2">
               {isMembershipExpired && (
-                <div className="rounded border p-3 text-sm" style={{ borderColor: "#dc2626", background: "#7f1d1d", color: "#fca5a5" }}>
+                <div className="rounded border p-3 text-sm" style={{ borderColor: "#dc2626", background: "var(--danger-bg)", color: "var(--danger-text)" }}>
                   ⚠ Membership has expired
                 </div>
               )}
               {hasNoCredits && (
-                <div className="rounded border p-3 text-sm" style={{ borderColor: "#dc2626", background: "#7f1d1d", color: "#fca5a5" }}>
+                <div className="rounded border p-3 text-sm" style={{ borderColor: "#dc2626", background: "var(--danger-bg)", color: "var(--danger-text)" }}>
                   ⚠ No credits remaining
                 </div>
               )}
