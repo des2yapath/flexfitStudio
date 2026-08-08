@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { payments, users, memberships, membershipPlans } from "@/db/schema";
+import { markPaymentPaid, refundPayment } from "../services/payment-service";
 import { router, protectedProcedure, adminProcedure } from "../trpc";
 
 export const paymentsRouter = router({
@@ -45,64 +45,13 @@ export const paymentsRouter = router({
 
   markPaid: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      const row = await ctx.db
-        .select()
-        .from(payments)
-        .where(eq(payments.id, input.id))
-        .get();
-
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Payment not found." });
-      }
-      if (row.status === "refunded") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Refunded payments cannot be marked paid.",
-        });
-      }
-
-      return ctx.db
-        .update(payments)
-        .set({ status: "paid" })
-        .where(eq(payments.id, input.id))
-        .returning()
-        .get();
-    }),
+    .mutation(({ ctx, input }) =>
+      markPaymentPaid(ctx.db, { paymentId: input.id }),
+    ),
 
   refund: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      const row = await ctx.db
-        .select()
-        .from(payments)
-        .where(eq(payments.id, input.id))
-        .get();
-
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Payment not found." });
-      }
-      if (row.status !== "paid") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Only paid payments can be refunded.",
-        });
-      }
-
-      const updated = await ctx.db
-        .update(payments)
-        .set({ status: "refunded" })
-        .where(eq(payments.id, input.id))
-        .returning()
-        .get();
-
-      if (row.membershipId) {
-        await ctx.db
-          .update(memberships)
-          .set({ status: "cancelled" })
-          .where(eq(memberships.id, row.membershipId));
-      }
-
-      return updated;
-    }),
+    .mutation(({ ctx, input }) =>
+      refundPayment(ctx.db, { paymentId: input.id }),
+    ),
 });
